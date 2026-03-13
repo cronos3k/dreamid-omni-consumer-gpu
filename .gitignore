@@ -1,0 +1,8 @@
+ckpts/
+results/
+upload.py
+convert_checkpoint.py
+dreamid_omni/__pycache__/
+dreamid_omni/modules/__pycache__/
+dreamid_omni/distributed_comms/__pycache__/
+dreamid_omni/utils/__pycache__/
