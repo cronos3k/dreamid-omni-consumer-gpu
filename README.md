@@ -17,6 +17,7 @@
 <p>
 
 ## 🔥 News
+- [03/13/2026] 🔥 Day 0 support for [vllm-omni](https://github.com/vllm-project/vllm-omni), with heartfelt gratitude to the vLLM Team for their support.!
 - [03/13/2026] 🔥 Our v1 version [code](https://github.com/Guoxu1233/DreamID-Omni) for R2AV is released!
 - [02/13/2026] 🔥 Our [paper](https://arxiv.org/abs/2602.12160) is released!
 - [01/05/2026] 🔥 The code for our previous work, [DreamID-V](https://github.com/bytedance/DreamID-V), has been released!
