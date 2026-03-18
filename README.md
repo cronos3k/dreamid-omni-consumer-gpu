@@ -18,7 +18,7 @@
 
 ## 🔥 News
 - [03/18/2026] 🔥 Thanks HM-RunningHub for supporting [ComfyUI](https://github.com/HM-RunningHub/ComfyUI_RH_Dreamid-Omni).
-- [03/13/2026] 🔥 Day 0 support from [vllm-omni](https://github.com/vllm-project/vllm-omni), with heartfelt gratitude to the vLLM-omni Team for their support.!
+- [03/13/2026] 🔥 Day 0 support from [vllm-omni](https://github.com/vllm-project/vllm-omni), with heartfelt gratitude to the vLLM-omni Team for their support!
 - [03/13/2026] 🔥 Our v1 version [code](https://github.com/Guoxu1233/DreamID-Omni) for R2AV is released!
 - [02/13/2026] 🔥 Our [paper](https://arxiv.org/abs/2602.12160) is released!
 - [01/05/2026] 🔥 The code for our previous work, [DreamID-V](https://github.com/bytedance/DreamID-V), has been released!
@@ -128,6 +128,24 @@ If you find our work helpful, please consider citing our paper and leaving valua
       archivePrefix={arXiv},
       primaryClass={cs.CV},
       url={https://arxiv.org/abs/2602.12160}, 
+}
+@misc{guo2026dreamidvbridgingimagetovideogaphighfidelity,
+      title={DreamID-V:Bridging the Image-to-Video Gap for High-Fidelity Face Swapping via Diffusion Transformer}, 
+      author={Xu Guo and Fulong Ye and Xinghui Li and Pengqi Tu and Pengze Zhang and Qichao Sun and Songtao Zhao and Xiangwang Hou and Qian He},
+      year={2026},
+      eprint={2601.01425},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2601.01425}, 
+}
+@misc{ye2025dreamidhighfidelityfastdiffusionbased,
+      title={DreamID: High-Fidelity and Fast diffusion-based Face Swapping via Triplet ID Group Learning}, 
+      author={Fulong Ye and Miao Hua and Pengze Zhang and Xinghui Li and Qichao Sun and Songtao Zhao and Qian He and Xinglong Wu},
+      year={2025},
+      eprint={2504.14509},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2504.14509}, 
 }
 ```
 
