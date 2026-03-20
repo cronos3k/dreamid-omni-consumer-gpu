@@ -96,7 +96,8 @@ Our prompts use the following special tags to control characters and speech:
 - **Speech**: `<S>Your speech content here<E>` - Text enclosed in these tags will be converted to speech using the corresponding character's reference audio.
 ### 💡 Structure Example
 We provide example prompts to help you get started with DreamID-Omni:
-- **Single-person generation**: `test_case/oneip`
+##### For optimal results, please refer to the input examples, use the **cropped face image** similar to ` /test_case/oneip/imgs/9/9.png` , and the **Structured Caption** in the format similar to `test_case/oneip/captions/9.json`(One IP) or  `test_case/twoip/captions/20.json` (Multi IP)`
+- **Single-person generation**: `test_case/oneip`， 
 - **Multi-person generation**: `test_case/twoip`
 
 
