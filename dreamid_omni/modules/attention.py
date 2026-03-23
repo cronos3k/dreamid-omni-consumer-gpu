@@ -91,7 +91,18 @@ def flash_attention(
             'Flash attention 3 is not available, use flash attention 2 instead.'
         )
 
-    # apply attention
+    # apply attention — with SDPA fallback when flash_attn is unavailable
+    if not FLASH_ATTN_2_AVAILABLE and not FLASH_ATTN_3_AVAILABLE:
+        # Fallback to PyTorch SDPA
+        q_sdpa = q.unflatten(0, (b, lq)).transpose(1, 2).to(dtype)
+        k_sdpa = k.unflatten(0, (b, lk)).transpose(1, 2).to(dtype)
+        v_sdpa = v.unflatten(0, (b, lk)).transpose(1, 2).to(dtype)
+        x = torch.nn.functional.scaled_dot_product_attention(
+            q_sdpa, k_sdpa, v_sdpa, is_causal=causal, dropout_p=dropout_p,
+            scale=softmax_scale)
+        x = x.transpose(1, 2).contiguous()
+        return x.type(out_dtype)
+
     if (version is None or version == 3) and FLASH_ATTN_3_AVAILABLE:
         # Note: dropout_p, window_size are not supported in FA3 now.
         x = flash_attn_interface.flash_attn_varlen_func(

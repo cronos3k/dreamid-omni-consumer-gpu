@@ -293,10 +293,18 @@ class FusionModel(nn.Module):
             """
             1 fusion block refers to 1 audio block with 1 video block.
             """
-   
+
             vid_block = self.video_model.blocks[i]
             audio_block = self.audio_model.blocks[i]
-     
+
+            # For multi-GPU sharding: move data to the device of the current block
+            block_device = next(vid_block.parameters()).device
+            if vid.device != block_device:
+                vid = vid.to(block_device)
+                audio = audio.to(block_device)
+                kwargs = {k: (v.to(block_device) if isinstance(v, torch.Tensor) else v)
+                          for k, v in kwargs.items()}
+
             vid, audio = gradient_checkpointing(
                     enabled=(self.training and self.gradient_checkpointing),
                     module=self.single_fusion_block_forward,
@@ -307,6 +315,11 @@ class FusionModel(nn.Module):
                     **kwargs
                 )
 
+        # Move embeddings to where the data ended up after the block loop
+        vid_e = vid_e.to(vid.device)
+        audio_e = audio_e.to(audio.device)
+        vid_kwargs['grid_sizes'] = vid_kwargs['grid_sizes'].to(vid.device)
+        audio_kwargs['grid_sizes'] = audio_kwargs['grid_sizes'].to(audio.device)
         vid = self.video_model.post_transformer_block_out(vid, vid_kwargs['grid_sizes'], vid_e)
         audio = self.audio_model.post_transformer_block_out(audio, audio_kwargs['grid_sizes'], audio_e)
 

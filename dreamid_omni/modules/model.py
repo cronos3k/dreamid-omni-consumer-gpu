@@ -118,6 +118,7 @@ def rope_apply_3d(x, grid_sizes, freqs,ref_lengths=None, offset_base=150):#x tor
 
     # split freqs
     # freqs = freqs.split([c - 2 * (c // 3), c // 3, c // 3], dim=1) #3, 1024 22   3,1024 21    3,1024,21
+    freqs = freqs.to(x.device)
     freqs_t, freqs_h, freqs_w = freqs.split([c - 2 * (c // 3), c // 3, c // 3], dim=1)
     output = []
     
@@ -138,8 +139,8 @@ def rope_apply_3d(x, grid_sizes, freqs,ref_lengths=None, offset_base=150):#x tor
         freqs_i_t = freqs_i_t.to(x.device)
         freqs_i = torch.cat([
             freqs_i_t.view(f, 1, 1, -1).expand(f, h, w, -1),
-            freqs_h[:h].view(1, h, 1, -1).expand(f, h, w, -1),
-            freqs_w[:w].view(1, 1, w, -1).expand(f, h, w, -1)
+            freqs_h[:h].to(x.device).view(1, h, 1, -1).expand(f, h, w, -1),
+            freqs_w[:w].to(x.device).view(1, 1, w, -1).expand(f, h, w, -1)
         ], dim=-1).reshape(seq_len, 1, -1)
         # apply rotary embedding
         x_i = torch.view_as_real(x_i * freqs_i).flatten(2)

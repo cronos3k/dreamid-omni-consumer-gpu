@@ -1,0 +1,21 @@
+
+ckpt_dir: ./ckpts
+output_dir: ./result/local_test
+sample_steps: 10
+solver_name: unipc
+model_name: "dreamid_omni"
+shift: 5.0
+sp_size: 1
+video_cfg_scale: 3.0
+video_ref_cfg_scale: 1.5
+audio_cfg_scale: 4.0
+audio_ref_cfg_scale: 2.0
+mode: "r2av"
+fp8: True
+cpu_offload: True
+seed: 100
+video_negative_prompt: "jitter, bad hands, blur, distortion"
+audio_negative_prompt: "robotic, muffled, echo, distorted"
+video_frame_height_width: [512, 992]
+each_example_n_times: 1
+data_root: ./test_case
