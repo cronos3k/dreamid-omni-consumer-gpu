@@ -1,153 +1,168 @@
-# DreamID-Omni: Unified Framework for Controllable Human-Centric Audio-Video Generation
-> [!NOTE]
-> This repository is forked from the `omni` branch of **[DreamID-V](https://github.com/bytedance/DreamID-V)**.
-<p align="center">
-  <a href="https://guoxu1233.github.io/DreamID-Omni/">🌐 Project Page</a> |
-  <a href="https://arxiv.org/abs/2602.12160">📜 Arxiv</a> |
-  <a href="https://huggingface.co/XuGuo699/DreamID-Omni">🤗 Models</a> |
-</p>
+# DreamID-Omni on Consumer GPUs — No H100 Required
 
-> **DreamID-Omni: Unified Framework for Controllable Human-Centric Audio-Video Generation**<br>
-> [Xu Guo](https://github.com/Guoxu1233/)<sup> * </sup>, [Fulong Ye](https://scholar.google.com/citations?user=-BbQ5VgAAAAJ&hl=zh-CN/)<sup> * </sup>, [Qichao Sun](https://github.com/sun631998316)<sup> *</sup><sup>&dagger;</sup>, [Liyang Chen](https://leoniuschen.github.io/),  [Bingchuan Li](https://scholar.google.com/citations?user=ac5Se6QAAAAJ&hl=zh-CN)<sup> &dagger;</sup>, [Pengze Zhang](https://pangzecheung.github.io/Homepage/), [Jiawei Liu](https://scholar.google.com/citations?user=X21Fz-EAAAAJ&hl=zh-CN), [Songtao Zhao](https://openreview.net/profile?id=~Songtao_Zhao1)<sup> &sect;</sup>,  [Qian He](https://scholar.google.com/citations?user=9rWWCgUAAAAJ), [Xiangwang Hou](https://scholar.google.com/citations?user=bpskf9kAAAAJ&hl=zh-CN)<sup> &sect;</sup>
-> <br><sup> * </sup>Equal contribution,<sup> &dagger; </sup>Project lead, <sup> &sect; </sup>Corresponding author 
-> <br>Tsinghua University | Intelligent Creation Team, ByteDance<br>
+Run **DreamID-Omni** (11.66B parameter identity-preserved audio-video model) on **multiple consumer 24GB GPUs** using layer sharding. This fork replaces the original sequence parallelism (which duplicates the full model on each GPU) with `accelerate`'s `dispatch_model` to **split model layers** across your cards.
+
+> Fork of [DreamID-Omni](https://github.com/Guoxu1233/DreamID-Omni) by Tsinghua University / ByteDance.
+> Layer sharding technique from [H100 Not Required: 32B FLUX.2-dev on 2017 Hardware](https://huggingface.co/blog/cronos3k/h100-not-required-32b-flux2-dev-running-on-2017-ha).
+
+## What This Fork Adds
+
+| Original | This Fork |
+|----------|-----------|
+| Needs 1x 80GB GPU (A100/H100) or 8-GPU sequence parallelism | Runs on **3-6x 24GB consumer GPUs** (RTX 3090, A5000, RTX 4090) |
+| Sequence parallelism duplicates full model per GPU | Layer sharding — each GPU holds a **different slice** of the model |
+| Requires flash_attn (ABI issues with newer PyTorch) | PyTorch SDPA fallback — works out of the box |
+| CLI only | **Gradio UI** included |
+
+## How It Works
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Layer Sharding: 11.66B model split across 6x 24GB GPUs       │
+│                                                                │
+│  GPU 0: Video+Audio Blocks 0-5 + Embeddings + VAE   ~11 GB    │
+│  GPU 1: Video+Audio Blocks 6-11                      ~7 GB    │
+│  GPU 2: Video+Audio Blocks 12-17                     ~7 GB    │
+│  GPU 3: Video+Audio Blocks 18-23 + T5 Encoder       ~13 GB   │
+│  GPU 4: Video+Audio Blocks 24-29 + Heads              ~7 GB   │
+│                                                                │
+│  Video block[i] and Audio block[i] stay CO-LOCATED             │
+│  (they cross-attend each other — must be same GPU)             │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Key Code Changes (5 files)
+
+1. **`inference_sharded.py`** — New inference script with explicit device map (replaces `torchrun` sequence parallelism)
+2. **`dreamid_omni/modules/fusion.py`** — Device-aware forward loop: moves tensors between GPUs as data flows through blocks
+3. **`dreamid_omni/modules/model.py`** — RoPE frequency tensors follow data across devices
+4. **`dreamid_omni/modules/attention.py`** — SDPA fallback when flash_attn is unavailable
+5. **`app.py`** — Gradio web interface
+
+## Hardware Requirements
+
+| Config | GPUs | Total VRAM | Status |
+|--------|------|------------|--------|
+| 6x RTX 3090/A5000 (24GB) | 6 | 144 GB | Tested, works |
+| 4x RTX 3090 (24GB) | 4 | 96 GB | Should work |
+| 3x RTX 4090 (24GB) | 3 | 72 GB | Should work |
+| 2x 24GB cards | 2 | 48 GB | Tight, may need reduced resolution |
+| 1x A100/H100 (80GB) | 1 | 80 GB | Use original repo instead |
+
+**All GPUs must be Ampere or newer** (compute >= 8.0). Turing cards (RTX 2080, Quadro RTX 8000) will break — no bfloat16 support.
+
+## Quick Start
+
+```bash
+# 1. Clone
+git clone https://github.com/cronos3k/dreamid-omni-consumer-gpu.git
+cd dreamid-omni-consumer-gpu
+
+# 2. Setup
+python -m venv venv && source venv/bin/activate
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt
+pip install accelerate imageio[ffmpeg]
+
+# 3. Download weights (~60GB)
+python download_weights.py --output-dir ./ckpts
+mv ckpts/DreamI_Omni ckpts/DreamID_Omni  # fix upstream typo
+
+# 4. Run — set CUDA_VISIBLE_DEVICES to your Ampere GPUs
+CUDA_DEVICE_ORDER=PCI_BUS_ID \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \
+python app.py
+# Opens Gradio UI at http://localhost:7866
+
+# Or headless:
+CUDA_DEVICE_ORDER=PCI_BUS_ID \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \
+python inference_sharded.py
+```
+
+## Performance
+
+On 6x NVIDIA A5000 (24GB each):
+
+| Steps | Resolution | Time/clip | Notes |
+|-------|-----------|-----------|-------|
+| 10 | 512x992 | ~3.5 min | Fast preview |
+| 50 | 512x992 | ~17 min | Full quality |
+
+~20 seconds per denoising step. Slower than single-GPU due to inter-GPU data transfers, but it **runs** — which is the point.
+
+## Gradio Interface
+
+Upload a face image + voice sample, describe the scene, and generate identity-preserved video with synchronized audio. All from a web browser.
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python app.py
+```
+
+## Gotchas We Hit
+
+1. **Paired blocks must be co-located.** DreamID-Omni's FusionModel cross-attends video_block[i] with audio_block[i]. They must be on the same GPU.
+2. **RoPE frequencies get stuck.** Rotary embeddings are stored as buffers that don't move with `dispatch_model`. Fix: `freqs = freqs.to(x.device)`.
+3. **flash_attn ABI mismatch.** Won't compile against torch 2.10+. Solution: remove it — PyTorch's built-in SDPA works fine.
+4. **Download script typo.** Official script saves to `DreamI_Omni`, engine expects `DreamID_Omni`.
+5. **Turing GPUs break everything.** Exclude non-Ampere cards via `CUDA_VISIBLE_DEVICES`.
+
+## Credits
+
+- **[DreamID-Omni](https://github.com/Guoxu1233/DreamID-Omni)** — Original model by Xu Guo et al., Tsinghua University / ByteDance
+- **Layer sharding technique** from [H100 Not Required](https://huggingface.co/blog/cronos3k/h100-not-required-32b-flux2-dev-running-on-2017-ha)
+- Built by [Gregor Hubert](https://huggingface.co/cronos3k)
+
+## License
+
+Apache 2.0 (following original DreamID-Omni license)
+
+---
+---
+
+# Original Model Card (for reference)
+
+*Everything below is from the [upstream DreamID-Omni repository](https://github.com/Guoxu1233/DreamID-Omni).*
+
+---
+
+## DreamID-Omni: Unified Framework for Controllable Human-Centric Audio-Video Generation
+
+> [Xu Guo](https://github.com/Guoxu1233/) et al.
+> Tsinghua University | Intelligent Creation Team, ByteDance
 
 <p align="center">
 <img src="assets/teaser.png" width=95%>
-<p>
+</p>
 
-## 🔥 News
-- [03/18/2026] 🔥 Thanks HM-RunningHub for supporting [ComfyUI](https://github.com/HM-RunningHub/ComfyUI_RH_Dreamid-Omni).
-- [03/13/2026] 🔥 Day 0 support from [vllm-omni](https://github.com/vllm-project/vllm-omni), with heartfelt gratitude to the vLLM-omni Team for their support!
-- [03/13/2026] 🔥 Our v1 version [code](https://github.com/Guoxu1233/DreamID-Omni) for R2AV is released!
-- [02/13/2026] 🔥 Our [paper](https://arxiv.org/abs/2602.12160) is released!
-- [01/05/2026] 🔥 The code for our previous work, [DreamID-V](https://github.com/bytedance/DreamID-V), has been released!
+<p align="center">
+  <a href="https://guoxu1233.github.io/DreamID-Omni/">Project Page</a> |
+  <a href="https://arxiv.org/abs/2602.12160">Paper</a> |
+  <a href="https://huggingface.co/XuGuo699/DreamID-Omni">Models</a>
+</p>
 
+### How to Create Prompts
+Prompts use special tags to control characters and speech:
+- **Subject Identity**: `<sub1>`, `<sub2>` — Represents character IPs from input images
+- **Speech**: `<S>Your speech content here<E>` — Converted to speech using the character's reference audio
 
-## 🎬 Demo
-<div align="center">
-  <video src="https://github.com/user-attachments/assets/21dda629-aee0-4c9e-b1ae-09552880a336" width="70%" poster=""> </video>
-</div>
+### Example Structure
+See `test_case/oneip/captions/9.json` (single person) or `test_case/twoip/captions/20.json` (multi person) for prompt format examples.
 
+### Acknowledgements
 
-## ⚡️ Quickstart
-### Installation
-```bash
-python3 download_weights.py
-conda create -n dreamid_omni python=3.11
-conda activate dreamid_omni
-pip install torch==2.6.0 torchvision torchaudio
-pip install -r requirements.txt
-pip install flash_attn --no-build-isolation
-```
-### Inference
+Built upon [Ovi](https://github.com/character-ai/Ovi), [Wan2.2](https://github.com/Wan-Video/Wan2.2), [MMAudio](https://github.com/hkchengrex/MMAudio), [Phantom](https://github.com/Phantom-video/Phantom), [HuMo](https://github.com/Phantom-video/HuMo), [OpenHumanVid](https://github.com/fudan-generative-vision/OpenHumanVid).
 
-#### Single-GPU inference
-``` sh
-python3 inference_r2av.py --config-file dreamid_omni/configs/inference/inference_r2av.yaml
-```
+### Citation
 
-#### Multi-GPU inference
-``` sh
-torchrun --nnodes 1 --nproc_per_node 8 inference_r2av.py --config-file dreamid_omni/configs/inference/inference_r2av.yaml
-```
-Before running multi-GPU inference, please open `dreamid_omni/configs/inference/inference_r2av.yaml` and set sp_size: 8
-
-#### vllm-omni inference
-
-##### Install vLLM-Omni
-Please follow the official installation guide:
-https://docs.vllm.ai/projects/vllm-omni/en/latest/getting_started/installation/
-
-##### Download DreamID-Omni Weights
-Download the model weights and configuration files:
-```sh
-cd vllm-omni/examples/offline_inference
-python download_dreamid_omni.py \
-    --output-dir weight-dir
-```
-After downloading, the directory `weight-dir` will contain the DreamID-Omni model weights and the required configuration files for inference.
-##### Run Inference
-###### Single-GPU Inference
-``` sh
-python x_to_video_audio.py \
-    --model weight-dir \
-    --prompt "<your_prompt>" \
-    --image-path <path_to_image1> <path_to_image2> \
-    --audio-path <path_to_audio1> <path_to_audio2> \
-    --num-inference-steps 45
-```
-More configurable parameters can be found in [x_to_video_audio.md](https://github.com/vllm-project/vllm-omni/blob/main/docs/user_guide/examples/offline_inference/x_to_video_audio.md).
-###### inference with multi-GPU
-``` sh
-python x_to_video_audio.py \
-    --model weight-dir \
-    --prompt "<your_prompt>" \
-    --image-path <path_to_image1> <path_to_image2> \
-    --audio-path <path_to_audio1> <path_to_audio2> \
-    --num-inference-steps 45
-    --cfg-parallel-size 2
-```
-More acceleration features will be introduced in future releases.
-
-## 🎨 How to Create 
-Our prompts use the following special tags to control characters and speech:
-- **Subject Identity**: `<sub1>`, `<sub2>` - Represents the character IPs provided in your input images (e.g., `<img1>` corresponds to `<sub1>`). Use these tags in your prompt to specify who is acting or speaking.
-- **Speech**: `<S>Your speech content here<E>` - Text enclosed in these tags will be converted to speech using the corresponding character's reference audio.
-### 💡 Structure Example
-We provide example prompts to help you get started with DreamID-Omni:
-##### For optimal results, please refer to the input examples, use the **cropped face image** similar to ` /test_case/oneip/imgs/9/9.png` , and the **Structured Caption** in the format similar to `test_case/oneip/captions/9.json`(One IP) or  `test_case/twoip/captions/20.json` (Multi IP)`
-- **Single-person generation**: `test_case/oneip`， 
-- **Multi-person generation**: `test_case/twoip`
-
-
-## 🙏 Acknowledgements
-
-Our work builds upon and is greatly inspired by several outstanding open-source projects, including [Ovi](https://github.com/character-ai/Ovi), [Wan2.2](https://github.com/Wan-Video/Wan2.2), [MMAudio](https://github.com/hkchengrex/MMAudio), [Phantom](https://github.com/Phantom-video/Phantom), [HuMo](https://github.com/Phantom-video/HuMo), [OpenHumanVid](https://github.com/fudan-generative-vision/OpenHumanVid). We sincerely thank the authors and contributors of these projects for generously sharing their excellent codes and ideas.
-
-
-## 📧 Contact
-If you have any comments or questions regarding this open-source project, please open a new issue or contact [Xu Guo](https://github.com/Guoxu1233/), [Fulong Ye](https://github.com/superhero-7) and [Qichao Sun](https://github.com/sun631998316).
-
-## ⚠️ Ethics Statement
-This project, **DreamID-Omni**, is intended for **academic research and technical demonstration purposes only**.
-- **Prohibited Use**: Users are strictly prohibited from using this codebase to generate content that is illegal, defamatory, pornographic, harmful, or infringes upon the privacy and rights of others.
-- **Responsibility**: Users bear full responsibility for the content they generate. The authors and contributors of this project assume no liability for any misuse or consequences arising from the use of this software.
-- **AI Labeling**: We strongly recommend marking generated videos as "AI-Generated" to prevent misinformation.
-By using this software, you agree to adhere to these guidelines and applicable local laws.
-
-## ⭐ Citation
-
-If you find our work helpful, please consider citing our paper and leaving valuable stars
-
-```
+```bibtex
 @misc{guo2026dreamidomni,
-      title={DreamID-Omni: Unified Framework for Controllable Human-Centric Audio-Video Generation}, 
+      title={DreamID-Omni: Unified Framework for Controllable Human-Centric Audio-Video Generation},
       author={Xu Guo and Fulong Ye and Qichao Sun and Liyang Chen and Bingchuan Li and Pengze Zhang and Jiawei Liu and Songtao Zhao and Qian He and Xiangwang Hou},
       year={2026},
       eprint={2602.12160},
       archivePrefix={arXiv},
       primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2602.12160}, 
-}
-@misc{guo2026dreamidvbridgingimagetovideogaphighfidelity,
-      title={DreamID-V:Bridging the Image-to-Video Gap for High-Fidelity Face Swapping via Diffusion Transformer}, 
-      author={Xu Guo and Fulong Ye and Xinghui Li and Pengqi Tu and Pengze Zhang and Qichao Sun and Songtao Zhao and Xiangwang Hou and Qian He},
-      year={2026},
-      eprint={2601.01425},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2601.01425}, 
-}
-@misc{ye2025dreamidhighfidelityfastdiffusionbased,
-      title={DreamID: High-Fidelity and Fast diffusion-based Face Swapping via Triplet ID Group Learning}, 
-      author={Fulong Ye and Miao Hua and Pengze Zhang and Xinghui Li and Qichao Sun and Songtao Zhao and Qian He and Xinglong Wu},
-      year={2025},
-      eprint={2504.14509},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2504.14509}, 
+      url={https://arxiv.org/abs/2602.12160},
 }
 ```
-
-
