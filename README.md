@@ -2,6 +2,14 @@
 
 Run **DreamID-Omni** (11.66B parameter identity-preserved audio-video model) on **multiple consumer 24GB GPUs** using layer sharding. This fork replaces the original sequence parallelism (which duplicates the full model on each GPU) with `accelerate`'s `dispatch_model` to **split model layers** across your cards.
 
+### Demo: Generated on 6x NVIDIA A5000 (24GB each)
+
+https://github.com/user-attachments/assets/luther_demo.mp4
+
+<video src="assets/luther_demo.mp4" width="100%" controls></video>
+
+*Martin Luther discussing the weather with Aristotle at a Victorian train station. 50 denoising steps, 512x992, ~17 minutes on consumer hardware.*
+
 > Fork of [DreamID-Omni](https://github.com/Guoxu1233/DreamID-Omni) by Tsinghua University / ByteDance.
 > Layer sharding technique from [H100 Not Required: 32B FLUX.2-dev on 2017 Hardware](https://huggingface.co/blog/cronos3k/h100-not-required-32b-flux2-dev-running-on-2017-ha).
 
